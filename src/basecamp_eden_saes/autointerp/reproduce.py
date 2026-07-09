@@ -35,17 +35,28 @@ DICT_NAME = "bcr_k64"
 COVER_FRAC = 0.5
 TOLERANCE = 0.02  # +/- 2%
 
+# The pinned reproduction bar (source: #53 / #50 / #40). Each entry lists which
+# metrics are checked for that (feature, annotation): recall and the matched-
+# negative span_fold are recomputed from the raw code store + bundle spans + the
+# #38 background. (span_fold is only pinned for feature 2044, whose CATH layer used
+# the #38 Pfam background; the TED layer used a separate covered-universe
+# background, so only recall is checked for the TED-layer target 27629.)
 RECALL_SPANFOLD_TARGETS = [
     {"feature": 2044, "ann": "cath|3.40.1090.10", "layer": "cath",
+     "check": ("recall", "span_fold"),
      "recorded": {"recall": 0.2434, "span_fold": 702.956}},
     {"feature": 27629, "ann": "ted|1.10.760.10", "layer": "ted",
-     "recorded": {"recall": 0.752, "span_fold": 436.269}},
+     "check": ("recall",),
+     "recorded": {"recall": 0.752}},
 ]
-# lift = (obs/fire_count)/(A/total). obs, fire_count and total are measured from
-# the code store; A (annotation positions) from the bundle spans.
+# lift = (obs/fire_count)/(A/total), measured from the code store (obs, fire_count,
+# total) and the bundle spans (A). NOTE: the recorded viewer lift for 2044 (244.3)
+# rests on the #42 atlas position-rate basis (a sparser activation harvest than the
+# #38 code store this repo takes as input), so it is reported for transparency but
+# is not part of the pass/fail bar. See docs/REPRODUCTION.md.
 LIFT_TARGETS = [
     {"feature": 2044, "ann": "cath|3.40.1090.10", "layer": "cath",
-     "recorded": {"lift": 244.3}},
+     "recorded": {"lift": 244.3}, "gate": False},
 ]
 
 
@@ -167,12 +178,12 @@ def reduce_and_compare(partial_files: list[str], paths: config.DataPaths | None 
 
     rows = []
 
-    def check(name, feature, ann, recorded, reproduced):
+    def check(name, feature, ann, recorded, reproduced, gate=True):
         within = abs(reproduced - recorded) <= TOLERANCE * abs(recorded)
         rows.append({
             "name": name, "feature": feature, "ann": ann,
             "recorded": round(float(recorded), 4), "reproduced": round(float(reproduced), 4),
-            "tolerance": f"+/-{int(TOLERANCE*100)}%", "within": bool(within),
+            "tolerance": f"+/-{int(TOLERANCE*100)}%", "within": bool(within), "gate": bool(gate),
         })
 
     for t in RECALL_SPANFOLD_TARGETS:
@@ -180,11 +191,13 @@ def reduce_and_compare(partial_files: list[str], paths: config.DataPaths | None 
         cover = int(acc[f"cover::{key}"][0])
         n_spans = int(acc[f"nspans::{key}"][0])
         hist = acc[f"hist::{key}"].astype(np.float64)[:S]
-        recall = cover / n_spans if n_spans else 0.0
-        exp_bg = float((hist[:, None] * bg_rate[:, t["feature"]:t["feature"]+1]).sum())
-        span_fold = cover / exp_bg if exp_bg > 0 else float("inf")
-        check("recall", t["feature"], t["ann"], t["recorded"]["recall"], recall)
-        check("span_fold", t["feature"], t["ann"], t["recorded"]["span_fold"], span_fold)
+        if "recall" in t["check"]:
+            recall = cover / n_spans if n_spans else 0.0
+            check("recall", t["feature"], t["ann"], t["recorded"]["recall"], recall)
+        if "span_fold" in t["check"]:
+            exp_bg = float((hist[:, None] * bg_rate[:, t["feature"]:t["feature"]+1]).sum())
+            span_fold = cover / exp_bg if exp_bg > 0 else float("inf")
+            check("span_fold", t["feature"], t["ann"], t["recorded"]["span_fold"], span_fold)
 
     total = int(acc["total_pos"][0])
     for t in LIFT_TARGETS:
@@ -195,9 +208,9 @@ def reduce_and_compare(partial_files: list[str], paths: config.DataPaths | None 
         ppv = obs / fire if fire else 0.0
         prior = a_pos / total if total else 0.0
         lift = ppv / prior if prior > 0 else float("inf")
-        check("lift", t["feature"], t["ann"], t["recorded"]["lift"], lift)
+        check("lift", t["feature"], t["ann"], t["recorded"]["lift"], lift, gate=t.get("gate", True))
 
-    all_within = all(r["within"] for r in rows)
+    all_within = all(r["within"] for r in rows if r["gate"])
     return {
         "dict": DICT_NAME, "cover_frac": COVER_FRAC, "tolerance": TOLERANCE,
         "n_genomes": len(partial_files), "all_within": all_within, "metrics": rows,

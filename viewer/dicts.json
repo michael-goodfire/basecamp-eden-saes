@@ -1,0 +1,5 @@
+{"dicts":[
+  {"id":"og2","label":"OG2 · ef8_k64 (Eden-7B-OG2-286B)","model":"Eden-7B-OG2-286B","headline":51.2},
+  {"id":"bcr_k64","label":"BCR · ef8_k64 (EDEN-7B-BCR)","model":"EDEN-7B-BCR","headline":36.9},
+  {"id":"bcr_k16","label":"BCR · ef8_k16 (EDEN-7B-BCR)","model":"EDEN-7B-BCR","headline":33.6}
+]}

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environments / build
+.venv/
+venv/
+dist/
+build/
+uv.lock.bak
+
+# Experiment tracking
+wandb/
+
+# Heavy data artifacts — referenced by path, never committed (see README "Data inputs")
+*.pt
+*.npy
+*.npz
+*.bin
+*.safetensors
+*.cif
+*.parquet
+*.arrow
+*.h5
+*.hdf5
+tokens.bin
+sequences.db
+
+# Large vendored 3D viewer lib is committed deliberately; keep it (negate the pattern above is not needed since it's .js)
+
+# Reproduction scratch
+reproduction/partials/
+/tmp/
+
+# OS
+.DS_Store
+.silico-session
+slurm-logs/
+*.pyc

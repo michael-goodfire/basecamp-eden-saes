@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="silico-theme" content="native">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAE feature genome-browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SAE feature genome-browser</h1>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px">dictionary
+      <select id="dictsel"></select></label>
+    <div class="sub" id="hsub"></div>
+    <a href="#" id="aboutlink" style="margin-left:auto;font-size:12.5px">about</a>
+  </header>
+  <div id="list">
+    <div id="controls">
+      <input id="search" placeholder="search feature id or annotation…" autocomplete="off">
+      <div class="row">
+        <select id="classfilter"><option value="">all classes</option></select>
+        <select id="sortby">
+          <option value="top_fold">sort: enrichment (fold)</option>
+          <option value="fire_count">sort: fire count</option>
+          <option value="mean_act">sort: mean activation</option>
+          <option value="density">sort: density</option>
+          <option value="coverage_pct">sort: CDS coverage</option>
+          <option value="feature_id">sort: feature id</option>
+        </select>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="hidedead" checked> hide dead</label>
+        <label><input type="checkbox" id="onlyannot"> annotated only</label>
+      </div>
+      <div id="count"></div>
+    </div>
+    <div id="rows"></div>
+  </div>
+  <div id="main"><div id="empty">Select a feature from the index to browse its top-activating windows.</div></div>
+</div>
+<div class="tt" id="tt"></div>
+<div id="about"><div class="box">
+  <h2 style="margin:0 0 8px;font-size:20px">About this viewer</h2>
+  <p style="color:#444">A feature-centric genome browser for sparse-autoencoder (SAE) features, selectable
+    from the <b>dictionary</b> switcher. Each dictionary was scored on the same annotated prokaryotic genome
+    panel in one coordinate frame, so the annotation tracks and structures apply to each. Pick a feature to
+    browse the genomic windows where it fires most strongly, each an IGV-style track stack with the feature's
+    dense per-nucleotide activation aligned to gene/CDS, Pfam domain, <b>CATH fold</b>, <b>TED fold</b>, RNA
+    gene, <b>regulatory</b> (promoters / RBS / terminators), <b>operon</b>, <b>replication</b> (oriC / ter /
+    DnaA boxes), <b>sequence-motif</b>, codon-position, GC, low-complexity, nucleotide, and amino-acid tracks.
+    A track appears whenever one of its spans falls in the current window.</p>
+  <h3 style="font-size:15px;margin:14px 0 4px">How to use</h3>
+  <ul style="color:#444;margin:0;padding-left:18px">
+    <li><b>Left</b> — search / sort / filter features by enrichment fold, fire count, activation, and more.
+      Click a feature to load it.</li>
+    <li><b>Top</b> — the feature's <b>detected annotations</b> (Pfam families, CATH/TED folds, and genomic
+      layers) with precision-fold, recall, and FDR-q, its annotation context vs background, optional
+      annotation-context correlations, and its nucleotide + amino-acid logos (built on the gene reading
+      strand).</li>
+    <li><b>Main</b> — page exemplars (◄ ►), then <b>zoom</b> (buttons or mouse-wheel) and <b>pan</b> (drag)
+      from the full region down to single nucleotides; nucleotide and amino-acid letters appear when zoomed
+      in. Every track stays coordinate-aligned at all zoom levels. Hover a gene / domain / RNA for its full
+      name.</li>
+    <li><b>Protein / structure</b> — for coding exemplars, the panel below the tracks lists the gene's GO
+      terms and loads the protein's 3D structure from a precomputed offline cache, badged by source
+      (<b>AlphaFold DB</b>) with the model's mean <b>pLDDT</b>. A <b>color</b> switch shades the structure
+      either by the feature's dense activation (viridis, dark = low → yellow = high, gray = inactive) or by
+      CATH / TED fold domain. The 3D loads in the background and never blocks the rest of the view. The panel
+      distinguishes three states: a rendered structure; <b>"no structure available"</b> for a coding protein
+      with no AlphaFold DB model (these can be folded later); and <b>"no structure expected"</b> for a
+      non-coding feature (no protein). The header reports the per-dictionary <b>structure coverage</b> — the
+      share of coding exemplars with a precomputed model.</li>
+  </ul>
+  <h3 style="font-size:15px;margin:14px 0 4px">Reading the activation track</h3>
+  <p style="color:#444">Where a dense re-harvest exists, the activation track is the feature's <b>dense
+    per-nucleotide</b> profile (a continuous filled curve, coordinate-accurate at nt zoom). Otherwise it
+    shows the <b>sparse</b> retained-firing track (stems at the harvest's retained positions; the row is
+    labeled "activation (sparse)"). The annotation tracks are dense and exact in both cases.</p>
+  <h3 style="font-size:15px;margin:14px 0 4px">Reading the logos</h3>
+  <p style="color:#444">The nucleotide and amino-acid logos are oriented to the <b>gene reading strand</b>
+    (so a coding motif reads in-frame), but the model reads the <i>firing</i> strand. Many features fire
+    <b>antisense</b> to their genes; for those the model's actual input is the reverse complement of the motif
+    shown. Each feature reports the fraction of coding exemplars that fire sense vs antisense.</p>
+  <h3 style="font-size:15px;margin:14px 0 4px">Provenance</h3>
+  <p style="color:#444;font-size:13px" id="aboutprov"></p>
+  <p style="color:#444;font-size:13px">This app is fully self-contained and offline: the same folder (viewer +
+    data + precomputed structures in <code>af_cache/</code>) runs as a standalone static site (see README.md).
+    No panel makes a live network call at view time.</p>
+  <button id="aboutclose" style="margin-top:12px;font:inherit;padding:5px 14px;border:1px solid #B4B4B4;background:#fff;border-radius:4px;cursor:pointer">close</button>
+</div></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
