@@ -43,10 +43,23 @@ separate covered-universe background (`structure/background.py`), so only `recal
 
 ## Why `lift` is reported but not gated
 
-**This repository ships `lift` as recomputed from the canonical #38 code store**
-(377.8 for feature 2044) — reported for transparency, not part of the pass/fail
-bar. The viewer's historical value (244.3) is *not* reproduced, because it rested
-on a superseded harvest (below).
+The repository carries `lift` in **two places, on two different activation
+bases**, and neither is part of the pass/fail bar:
+
+- **`bes-reproduce`** recomputes `lift` from the canonical #38 code store —
+  **377.8** for feature 2044 — reported for transparency alongside the gated span
+  metrics.
+- **The viewer** (`atlas/enrichment.py` → the served feature atlas, rendered by
+  `viewer/js/main.js`) embeds the *historical* `lift` = **244.3**, which rests on
+  the earlier/sparser #42 atlas position-rate basis (see below). This value is
+  preserved as-is so the deployed atlas matches the source thread; it is **not**
+  recomputed from the canonical #38 inputs and is flagged as the superseded #42
+  basis in `viewer/README.md`.
+
+The two numbers are consistent once you know they use different harvests: the
+position-level firing rate differs between the #42 (sparse) and #38 (dense)
+activation bases, so `PPV/prior` differs. The span-level metrics (recall,
+span_fold), which #40 computed from the #38 store, reproduce exactly.
 
 `lift = PPV / prior` is a **position-level** effect size:
 `PPV = obs / fire_count` (fraction of a feature's firings that land inside the

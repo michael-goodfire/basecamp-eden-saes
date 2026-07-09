@@ -101,3 +101,18 @@ shared filesystem), copies the structure sidecars, and writes `<dest>/manifest.j
 The per-dict atlas JSON is produced upstream by the other `atlas` modules
 (`rebuild` -> `span_rates` -> `enrichment`, then `deploy apply`). Serve `<dest>`
 (or `<dest>/viewer`) with any static file server; open `index.html`.
+
+## Note on the `lift` metric (superseded #42 basis)
+
+Each detected annotation entry carries a position-level `lift` = PPV / prior
+(`atlas/enrichment.py`). The `lift` values embedded in the *deployed* atlas — and
+therefore shown in this viewer (e.g. feature 2044 / `cath|3.40.1090.10` reads
+**244.3**) — rest on the earlier, sparser **#42 atlas position-rate basis**, which
+the packaging reconciliation lists as *superseded*. They are preserved as-is so
+the deployed atlas matches the source thread.
+
+They are **not** recomputed from the canonical #38 code store this repository takes
+as input. Recomputing `lift` from the canonical inputs (`bes-reproduce`) gives a
+different value on the denser #38 activation basis (377.8 for feature 2044). The
+span-level metrics shown in the viewer (`recall`, `span_fold`) *do* derive from the
+#38 store and reproduce exactly. See `docs/REPRODUCTION.md` for the full account.
