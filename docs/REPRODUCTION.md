@@ -43,6 +43,11 @@ separate covered-universe background (`structure/background.py`), so only `recal
 
 ## Why `lift` is reported but not gated
 
+**This repository ships `lift` as recomputed from the canonical #38 code store**
+(377.8 for feature 2044) — reported for transparency, not part of the pass/fail
+bar. The viewer's historical value (244.3) is *not* reproduced, because it rested
+on a superseded harvest (below).
+
 `lift = PPV / prior` is a **position-level** effect size:
 `PPV = obs / fire_count` (fraction of a feature's firings that land inside the
 annotation) and `prior = A / total` (fraction of all positions inside the
