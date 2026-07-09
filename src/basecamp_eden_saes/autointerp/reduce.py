@@ -1,0 +1,161 @@
+"""Reduce per-genome span-coverage partials into the enrichment table.
+
+Sums the ``cov::``/``nul::``/``his::`` partials across genomes, applies the
+matched-negative background, and emits one significant (annotation, feature) row
+per pair that clears the support / fold / null / FDR gates:
+
+    recall         = covered / n_spans
+    precision_fold = covered / E_bg,   E_bg = sum_s hist[s] * bg_rate[s, feature]
+    null_fold      = covered / null_covered      (circular-shift null)
+    p              = Poisson upper tail of ``covered`` given mean ``E_bg``  -> q (BH)
+
+``bg_rate[s, f] = bg_cover[s, f] / bg_count[s]`` is read from the per-dictionary
+``bg.npz`` (35 length x GC strata). The reduce is deterministic; only the null-
+derived columns depend on the circular-shift seed used at ``join_cover`` time.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+
+from . import metrics as M
+
+MIN_SPANS = 20
+FOLD_MIN = 2.0
+NULL_FOLD_MIN = 1.5
+Q_MAX = 0.05
+
+
+def load_background(bg_npz: str | Path) -> np.ndarray:
+    """Return ``bg_rate`` of shape ``(S, F)`` from a matched-negative ``bg.npz``."""
+    bg = np.load(bg_npz)
+    bg_count = bg["bg_count"].astype(np.float64)
+    bg_cover = bg["bg_cover"].astype(np.float64)
+    return bg_cover / np.maximum(bg_count[:, None], 1.0)
+
+
+def sum_partials(
+    partials: list[str | Path], prefix: str = ""
+) -> tuple[dict, dict, dict, dict]:
+    """Sum partial npz files. Returns ``(cover, nullc, hist, n_spans)`` dicts."""
+    cover: dict[str, np.ndarray] = {}
+    nullc: dict[str, np.ndarray] = {}
+    hist: dict[str, np.ndarray] = {}
+    nsp: dict[str, int] = defaultdict(int)
+    for f in partials:
+        z = np.load(f)
+        ns_path = str(f) + ".nspans.json"
+        ns = json.load(open(ns_path)) if Path(ns_path).exists() else {}
+        for k in z.files:
+            if "::" not in k:
+                continue
+            kind, ann = k.split("::", 1)
+            if prefix and not ann.startswith(prefix):
+                continue
+            if kind == "cov":
+                cover[ann] = cover.get(ann, 0) + z[k]
+            elif kind == "nul":
+                nullc[ann] = nullc.get(ann, 0) + z[k]
+            elif kind == "his":
+                hist[ann] = hist.get(ann, 0) + z[k]
+        for a, v in ns.items():
+            if not prefix or a.startswith(prefix):
+                nsp[a] += int(v)
+    return cover, nullc, hist, dict(nsp)
+
+
+def enrichment_rows(
+    cover: dict,
+    nullc: dict,
+    hist: dict,
+    nsp: dict,
+    bg_rate: np.ndarray,
+    labels: dict[str, str] | None = None,
+    min_spans: int = MIN_SPANS,
+    gated: bool = True,
+) -> list[dict]:
+    """Compute enrichment rows from summed partials.
+
+    With ``gated=True`` only pairs clearing the support/fold/null/FDR gates are
+    returned; with ``gated=False`` every fired pair is returned (used by the
+    reproduction check, which targets a specific pair).
+    """
+    labels = labels or {}
+    S = bg_rate.shape[0]
+    rows: list[dict] = []
+    for ann in sorted(cover):
+        n = nsp.get(ann, int(hist[ann].sum()))
+        if n < min_spans:
+            continue
+        cov = cover[ann].astype(np.float64)
+        nul = nullc[ann].astype(np.float64)
+        h = hist[ann].astype(np.float64)[:S]
+        exp_bg = (h[:, None] * bg_rate).sum(axis=0)  # (F,) expected covered spans
+        feats = np.where(cov > 0)[0]
+        pvals, tmp = [], []
+        for f in feats:
+            c = cov[f]
+            recall = c / n
+            pf = c / exp_bg[f] if exp_bg[f] > 0 else np.inf
+            nf = c / nul[f] if nul[f] > 0 else (c / 0.5)
+            p = M.poisson_upper_tail(int(round(c)), max(exp_bg[f], 1e-9))
+            pvals.append(p)
+            tmp.append((int(f), int(c), recall, pf, nf, p))
+        q = M.bh_qvalues(np.array(pvals)) if pvals else np.array([])
+        for (f, c, recall, pf, nf, p), qv in zip(tmp, q):
+            if gated and not (qv <= Q_MAX and pf >= FOLD_MIN and nf >= NULL_FOLD_MIN):
+                continue
+            rlo, rhi = M.wilson_interval(c, n)
+            rows.append({
+                "ann": ann, "label": labels.get(ann, ""), "feature": f,
+                "n_spans": int(n), "n_covered": int(c),
+                "recall": round(recall, 4), "recall_lo": round(rlo, 4),
+                "recall_hi": round(rhi, 4), "precision_fold": round(float(pf), 3),
+                "null_fold": round(float(nf), 3), "p": float(p), "q": float(qv),
+            })
+    rows.sort(key=lambda r: (r["ann"], -r["recall"]))
+    return rows
+
+
+def reduce_partials(
+    partials: list[str | Path],
+    bg_npz: str | Path,
+    prefix: str = "",
+    labels: dict[str, str] | None = None,
+    min_spans: int = MIN_SPANS,
+) -> list[dict]:
+    """Convenience: sum partials and compute gated enrichment rows."""
+    cover, nullc, hist, nsp = sum_partials(partials, prefix=prefix)
+    bg_rate = load_background(bg_npz)
+    return enrichment_rows(cover, nullc, hist, nsp, bg_rate, labels=labels, min_spans=min_spans)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Reduce span-coverage partials into enrichment rows.")
+    ap.add_argument("--partials", required=True, help="glob for *_partial.npz")
+    ap.add_argument("--bg", required=True)
+    ap.add_argument("--labels", default="", help="optional json {ann: label}")
+    ap.add_argument("--out", required=True, help="output directory")
+    ap.add_argument("--prefix", default="", help="only reduce anns with this key prefix")
+    ap.add_argument("--min-spans", type=int, default=MIN_SPANS)
+    args = ap.parse_args(argv)
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    labels = json.load(open(args.labels)) if args.labels and Path(args.labels).exists() else {}
+    files = sorted(glob.glob(args.partials))
+    print(f"{len(files)} partial files")
+    rows = reduce_partials(files, args.bg, prefix=args.prefix, labels=labels, min_spans=args.min_spans)
+    json.dump(rows, open(out / "span_enrichment.json", "w"))
+    print(f"wrote {len(rows)} significant rows -> {out / 'span_enrichment.json'}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
