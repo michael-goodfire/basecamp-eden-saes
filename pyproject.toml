@@ -67,6 +67,11 @@ bes-rejoin = "basecamp_eden_saes.analysis.rejoin:main"
 bes-generalization = "basecamp_eden_saes.analysis.generalization:main"
 # Atlas builder.
 bes-build-atlas = "basecamp_eden_saes.atlas.rebuild:main"
+# Annotation-panel v2 layer builders (#70).
+bes-build-regulatory = "basecamp_eden_saes.annotations.regulatory_spans:main"
+bes-build-mge = "basecamp_eden_saes.annotations.mge:main"
+bes-build-eggnog = "basecamp_eden_saes.annotations.eggnog_spans:main"
+bes-build-rfam = "basecamp_eden_saes.annotations.rfam_spans:main"
 
 [build-system]
 requires = ["hatchling"]
