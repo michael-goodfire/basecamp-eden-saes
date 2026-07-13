@@ -54,12 +54,15 @@ def parse_tblout(path: str | Path) -> list[tuple[str, str, str, int, int]]:
         f = line.split()
         if len(f) < 20:
             continue
+        # --fmt 2 columns: idx(0) tname(1) tacc(2) qname(3) qacc(4) clan(5) mdl(6)
+        # mdlfrom(7) mdlto(8) seqfrom(9) seqto(10) strand(11) trunc(12) pass(13)
+        # gc(14) bias(15) score(16) Evalue(17) inc(18) olp(19) ...
         rf_acc = f[2]            # target accession RF#####
         contig = f[3]            # query name
         seq_from, seq_to = int(f[9]), int(f[10])
         strand = f[11]
-        inc = f[17]              # '!' significant, '?' marginal
-        olp = f[18]              # '*'/'^' kept, '=' clan-removed
+        inc = f[18]              # '!' significant, '?' marginal
+        olp = f[19]              # '*'/'^' kept, '=' clan-removed
         if not rf_acc.startswith("RF"):
             continue
         if inc != "!" or olp not in ("*", "^"):
