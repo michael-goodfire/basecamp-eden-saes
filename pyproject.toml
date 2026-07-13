@@ -71,6 +71,7 @@ bes-generalization = "basecamp_eden_saes.analysis.generalization:main"
 # Atlas builder.
 bes-build-atlas = "basecamp_eden_saes.atlas.rebuild:main"
 bes-build-associations = "basecamp_eden_saes.atlas.build_associations:main"
+bes-deploy-bcr28 = "basecamp_eden_saes.atlas.deploy_bcr28:main"
 # Annotation-panel v2 layer builders (#70).
 bes-build-regulatory = "basecamp_eden_saes.annotations.regulatory_spans:main"
 bes-build-mge = "basecamp_eden_saes.annotations.mge:main"
