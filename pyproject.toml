@@ -63,12 +63,14 @@ bes-select-sae = "basecamp_eden_saes.sae.select:main"
 bes-span-cover = "basecamp_eden_saes.autointerp.join_cover:main"
 bes-span-reduce = "basecamp_eden_saes.autointerp.reduce:main"
 bes-build-bg = "basecamp_eden_saes.autointerp.build_bg:main"
+bes-span-poscover = "basecamp_eden_saes.autointerp.pos_cover:main"
 bes-reproduce = "basecamp_eden_saes.autointerp.reproduce:main"
 # Structure-beyond-sequence analysis.
 bes-rejoin = "basecamp_eden_saes.analysis.rejoin:main"
 bes-generalization = "basecamp_eden_saes.analysis.generalization:main"
 # Atlas builder.
 bes-build-atlas = "basecamp_eden_saes.atlas.rebuild:main"
+bes-build-associations = "basecamp_eden_saes.atlas.build_associations:main"
 # Annotation-panel v2 layer builders (#70).
 bes-build-regulatory = "basecamp_eden_saes.annotations.regulatory_spans:main"
 bes-build-mge = "basecamp_eden_saes.annotations.mge:main"
