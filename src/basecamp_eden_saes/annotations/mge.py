@@ -141,8 +141,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.acc:
         accs = [args.acc]
     else:
-        accs = sorted({Path(p).name.split(".minced")[0].split(".isescan")[0].split(".phispy")[0]
-                       for p in glob.glob(str(Path(args.tool_dir) / "GCF_*"))})
+        accs = sorted(Path(p).name[:-len(".minced.gff")]
+                      for p in glob.glob(str(Path(args.tool_dir) / "*.minced.gff")))
     for acc in accs:
         c = build_accession(args.tool_dir, acc, out / f"{acc}.tsv")
         grand.update(c)
