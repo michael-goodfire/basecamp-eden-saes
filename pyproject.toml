@@ -62,6 +62,7 @@ bes-select-sae = "basecamp_eden_saes.sae.select:main"
 # Autointerp span metrics + reproduction check.
 bes-span-cover = "basecamp_eden_saes.autointerp.join_cover:main"
 bes-span-reduce = "basecamp_eden_saes.autointerp.reduce:main"
+bes-build-bg = "basecamp_eden_saes.autointerp.build_bg:main"
 bes-reproduce = "basecamp_eden_saes.autointerp.reproduce:main"
 # Structure-beyond-sequence analysis.
 bes-rejoin = "basecamp_eden_saes.analysis.rejoin:main"

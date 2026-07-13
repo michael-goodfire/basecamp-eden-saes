@@ -43,8 +43,16 @@ def span_cover_features(
     length_total: int,
     n_features: int,
     cover_frac: float,
+    overlap: bool = False,
 ) -> np.ndarray:
-    """Feature ids that fire in at least ``cover_frac`` of a span's positions.
+    """Feature ids that cover a span.
+
+    Two cover rules:
+      * ``overlap=False`` (legacy): feature fires in at least ``cover_frac`` of the
+        span's positions (the >=50%-cover rule, kept for 7B reproducibility).
+      * ``overlap=True``: feature fires on >=1 position inside the span (the
+        approved motif-aware rule; ``cover_frac`` no longer gates). Recall then =
+        fraction of an annotation's spans the feature fires in.
 
     ``start``/``end`` are half-open code-position coordinates. When ``start > end``
     the span wraps the circular contig (used by the circular-shift null); the two
@@ -61,7 +69,8 @@ def span_cover_features(
     if seg.size == 0 or length == 0:
         return np.empty(0, dtype=np.int64)
     counts = np.bincount(seg, minlength=n_features)
-    return np.where(counts >= cover_frac * length)[0]
+    thresh = 1.0 if overlap else cover_frac * length
+    return np.where(counts >= thresh)[0]
 
 
 def span_firing_positions(

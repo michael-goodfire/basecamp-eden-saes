@@ -51,6 +51,7 @@ def cover_genome(
     n_null: int = 8,
     n_features: int = M.F_DEFAULT,
     seed: int = 0,
+    overlap: bool = False,
 ) -> tuple[dict, dict]:
     """Compute cover/null/hist partials for one genome.
 
@@ -102,7 +103,7 @@ def cover_genome(
             ensure(a)
             length = e - s
             cs, ce = M.span_to_code_coords(s, e, st, length_total)
-            fs = M.span_cover_features(indptr, indices, cs, ce, length_total, n_features, cover_frac)
+            fs = M.span_cover_features(indptr, indices, cs, ce, length_total, n_features, cover_frac, overlap=overlap)
             if fs.size:
                 cover[a][fs] += 1
             gc = M.gc_fraction(seq, s, e) if seq is not None else 0.0
@@ -113,7 +114,7 @@ def cover_genome(
                 ne = ns + length
                 fsn = M.span_cover_features(
                     indptr, indices, ns, ne if ne <= length_total else ne - length_total,
-                    length_total, n_features, cover_frac,
+                    length_total, n_features, cover_frac, overlap=overlap,
                 )
                 if fsn.size:
                     nullc[a][fsn] += inv_nn
@@ -138,6 +139,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--n-null", type=int, default=8)
     ap.add_argument("--F", type=int, default=M.F_DEFAULT)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--overlap", action="store_true",
+                    help="cover = fires on >=1 position in the span (motif-aware); "
+                         "otherwise the legacy >=cover_frac rule")
     args = ap.parse_args(argv)
 
     spans = read_spans(args.spans)
@@ -149,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     arrays, nsp = cover_genome(
         args.acc, args.codes_dir, args.fasta, args.bg, spans,
         cover_frac=args.cover, n_null=args.n_null, n_features=args.F, seed=args.seed,
+        overlap=args.overlap,
     )
     np.savez_compressed(args.out, **arrays)
     json.dump(nsp, open(args.out + ".nspans.json", "w"))
