@@ -49,10 +49,10 @@ def sum_partials(
     hist: dict[str, np.ndarray] = {}
     nsp: dict[str, int] = defaultdict(int)
     for f in partials:
-        z = np.load(f)
-        ns_path = str(f) + ".nspans.json"
-        ns = json.load(open(ns_path)) if Path(ns_path).exists() else {}
-        for k in z.files:
+        with np.load(f) as z:  # context-manage: close each NpzFile handle (avoids buffer accumulation over 152 partials)
+          ns_path = str(f) + ".nspans.json"
+          ns = json.load(open(ns_path)) if Path(ns_path).exists() else {}
+          for k in z.files:
             if "::" not in k:
                 continue
             kind, ann = k.split("::", 1)
