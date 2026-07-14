@@ -131,7 +131,7 @@ def build(cover_dir, bg_npz, labels, prefixes, out_dir, min_spans=20, topk=TOPK)
     print(f"{total_pairs} light-significant pairs; taking top-{topk} per feature by precision_fold...", flush=True)
 
     # per-feature top-K by precision_fold: sort by (feature, -precision_fold), keep first K per feature
-    order = np.lexsort((-pf, feat))
+    order = np.lexsort((-rl, feat))  # per-feature top-K by recall_lift (primary metric)
     feat_s = feat[order]
     # rank within each feature group
     grp_start = np.concatenate(([0], np.where(np.diff(feat_s) != 0)[0] + 1))
@@ -149,24 +149,28 @@ def build(cover_dir, bg_npz, labels, prefixes, out_dir, min_spans=20, topk=TOPK)
         cov_rate = float(rec[j]); pfj = float(pf[j])
         bg = round(cov_rate / pfj, 6) if pfj > 0 else 0.0
         rlo, rhi = M.wilson_interval(int(ncov[j]), nsp_all.get(ann, 0))
+        rlv = round(float(rl[j]), 3)
         entry = {
             "id": ann, "class": _ann_class(ann), "pretty": labels.get(ann, "") or ann,
-            "span_fold": round(pfj, 3), "cover_rate": round(cov_rate, 4), "recall": round(cov_rate, 4),
+            # primary metric first, then secondary; null_fold kept as an alias of
+            # recall_lift for bcr_k64 viewer-JS schema compatibility.
+            "recall_lift": rlv, "precision_fold": round(pfj, 3), "recall": round(cov_rate, 4),
+            "span_fold": round(pfj, 3), "null_fold": rlv, "cover_rate": round(cov_rate, 4),
             "recall_lo": round(rlo, 4), "recall_hi": round(rhi, 4),
             "n_spans": int(nsp_all.get(ann, 0)), "n_covered": int(ncov[j]),
-            "recall_lift": round(float(rl[j]), 3), "fdr": float(q[j]), "matched_bg_rate": bg,
+            "fdr": float(q[j]), "matched_bg_rate": bg,
         }
         detected[fs].append(entry)
         span_rates[fs][ann] = [round(pfj, 3), round(cov_rate, 4), bg]
     for fs in detected:
-        detected[fs].sort(key=lambda e: -(e["span_fold"] or 0))
+        detected[fs].sort(key=lambda e: -(e["recall_lift"] or 0))
 
     index_rows = []
     for fs, ents in detected.items():
         top = ents[0]
         index_rows.append({"feature_id": int(fs), "top_annotation": top["pretty"],
-                           "top_class": top["class"], "top_precision_fold": top["span_fold"],
-                           "top_recall": top["recall"], "top_recall_lift": top["recall_lift"]})
+                           "top_class": top["class"], "top_recall_lift": top["recall_lift"],
+                           "top_recall": top["recall"], "top_precision_fold": top["precision_fold"]})
 
     json.dump(span_rates, open(out / "span_rates.json", "w"))
     json.dump(detected, open(out / "detected_by_feature.json", "w"))
@@ -176,8 +180,8 @@ def build(cover_dir, bg_npz, labels, prefixes, out_dir, min_spans=20, topk=TOPK)
         "kept_pairs": int(kept_idx.size), "light_significant_pairs_total": int(total_pairs),
         "per_layer_light_pairs": dict(per_layer),
         "light_prefilter": {"precision_fold>=": FOLD_MIN, "recall_lift>=": LIFT_MIN, "q<=": R.Q_MAX},
-        "ranked_by": "precision_fold",
-        "note": "top-K per feature by precision_fold; recall_lift + recall stored per entry; raise thresholds downstream.",
+        "ranked_by": "recall_lift",
+        "note": "top-K per feature by recall_lift (primary); precision_fold + recall stored per entry; raise thresholds downstream.",
     }
     json.dump(summary, open(out / "assoc_summary.json", "w"), indent=2)
     print(json.dumps(summary, indent=2))
