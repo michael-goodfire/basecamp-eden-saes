@@ -73,13 +73,32 @@ def build(cover_dir, bg_npz, pos_dir, labels, fire_count, total_pos, prefixes,
     # the tiny .nspans.json sidecars give panel span counts; only ann with
     # >= min_spans can ever pass, so skip accumulating the rest (drops ~15k rare
     # EC/KO singletons that would gate out anyway).
-    print("prefiltering annotations by panel n_spans...", flush=True)
-    panel_ns = R.panel_nspans(parts)
-    keep = {a for a, n in panel_ns.items() if n >= min_spans}
-    print(f"keep {len(keep)}/{len(panel_ns)} annotations with >= {min_spans} spans", flush=True)
-    # Read the 152 partials ONCE, accumulating only kept annotations.
-    print(f"summing {len(parts)} partials once...", flush=True)
-    cover_all, null_all, hist_all, nsp_all = R.sum_partials(parts, keep_anns=keep)
+    # Cache the summed arrays: the sum over 152 partials is the expensive step, so
+    # persist it and skip re-summing on any reduce rerun (gate/label tweaks).
+    cache = out / "summed_arrays.npz"
+    cache_nsp = out / "summed_nspans.json"
+    if cache.exists() and cache_nsp.exists():
+        print(f"loading cached sum from {cache}", flush=True)
+        with np.load(cache) as z:
+            cover_all = {k[4:]: z[k] for k in z.files if k.startswith("cov::")}
+            null_all = {k[4:]: z[k] for k in z.files if k.startswith("nul::")}
+            hist_all = {k[4:]: z[k] for k in z.files if k.startswith("his::")}
+        nsp_all = json.load(open(cache_nsp))
+    else:
+        print("prefiltering annotations by panel n_spans...", flush=True)
+        panel_ns = R.panel_nspans(parts)
+        keep = {a for a, n in panel_ns.items() if n >= min_spans}
+        print(f"keep {len(keep)}/{len(panel_ns)} annotations with >= {min_spans} spans", flush=True)
+        print(f"summing {len(parts)} partials once...", flush=True)
+        cover_all, null_all, hist_all, nsp_all = R.sum_partials(parts, keep_anns=keep)
+        arrs = {}
+        for a in cover_all:
+            arrs[f"cov::{a}"] = cover_all[a]
+            arrs[f"nul::{a}"] = null_all[a]
+            arrs[f"his::{a}"] = hist_all[a]
+        np.savez(str(cache), **arrs)
+        json.dump(nsp_all, open(cache_nsp, "w"))
+        print(f"cached sum -> {cache}", flush=True)
     bg_rate = R.load_background(bg_npz)
     for pfx in prefixes:
         keep = [a for a in cover_all if a.split("|", 1)[0] == pfx]
