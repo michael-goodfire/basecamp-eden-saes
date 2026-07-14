@@ -118,19 +118,27 @@ def enrichment_rows(
         h = hist[ann].astype(np.float64)[:S]
         exp_bg = (h[:, None] * bg_rate).sum(axis=0)  # (F,) expected covered spans
         feats = np.where(cov > 0)[0]
-        pvals, tmp = [], []
-        for f in feats:
-            c = cov[f]
-            recall = c / n
-            pf = c / exp_bg[f] if exp_bg[f] > 0 else np.inf
-            nf = c / nul[f] if nul[f] > 0 else (c / 0.5)
-            p = M.poisson_upper_tail(int(round(c)), max(exp_bg[f], 1e-9))
-            pvals.append(p)
-            tmp.append((int(f), int(c), recall, pf, nf, p))
-        q = M.bh_qvalues(np.array(pvals)) if pvals else np.array([])
-        for (f, c, recall, pf, nf, p), qv in zip(tmp, q):
-            if gated and not (qv <= Q_MAX and pf >= FOLD_MIN and nf >= NULL_FOLD_MIN):
-                continue
+        if feats.size == 0:
+            continue
+        # VECTORIZED over features (was a per-feature scipy.sf loop -> ~1000x fewer calls).
+        from scipy.stats import poisson
+        c_arr = cov[feats]
+        e_arr = np.maximum(exp_bg[feats], 1e-9)
+        nul_arr = nul[feats]
+        k_arr = np.round(c_arr).astype(np.int64)
+        pvals = poisson.sf(k_arr - 1, e_arr)
+        pvals = np.where(k_arr <= 0, 1.0, pvals)
+        q_arr = M.bh_qvalues(pvals)
+        pf_arr = np.where(e_arr > 0, c_arr / e_arr, np.inf)
+        nf_arr = np.where(nul_arr > 0, c_arr / nul_arr, c_arr / 0.5)
+        recall_arr = c_arr / n
+        if gated:
+            mask = (q_arr <= Q_MAX) & (pf_arr >= FOLD_MIN) & (nf_arr >= NULL_FOLD_MIN)
+        else:
+            mask = np.ones(feats.size, dtype=bool)
+        for i in np.where(mask)[0]:
+            f = int(feats[i]); c = c_arr[i]; recall = recall_arr[i]
+            pf = pf_arr[i]; nf = nf_arr[i]; p = float(pvals[i]); qv = float(q_arr[i])
             rlo, rhi = M.wilson_interval(c, n)
             rows.append({
                 "ann": ann, "label": labels.get(ann, ""), "feature": f,
