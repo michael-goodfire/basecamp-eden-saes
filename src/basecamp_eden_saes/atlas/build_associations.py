@@ -69,10 +69,17 @@ def build(cover_dir, bg_npz, pos_dir, labels, fire_count, total_pos, prefixes,
     detected: dict[str, list] = defaultdict(list)
     per_layer = defaultdict(int)
 
-    # Read the 152 partials ONCE (they are ~300 MB each); reduce every prefix from
-    # the in-memory sums rather than re-globbing per prefix.
+    # Prefilter annotations to the support gate BEFORE the expensive array sum:
+    # the tiny .nspans.json sidecars give panel span counts; only ann with
+    # >= min_spans can ever pass, so skip accumulating the rest (drops ~15k rare
+    # EC/KO singletons that would gate out anyway).
+    print("prefiltering annotations by panel n_spans...", flush=True)
+    panel_ns = R.panel_nspans(parts)
+    keep = {a for a, n in panel_ns.items() if n >= min_spans}
+    print(f"keep {len(keep)}/{len(panel_ns)} annotations with >= {min_spans} spans", flush=True)
+    # Read the 152 partials ONCE, accumulating only kept annotations.
     print(f"summing {len(parts)} partials once...", flush=True)
-    cover_all, null_all, hist_all, nsp_all = R.sum_partials(parts)
+    cover_all, null_all, hist_all, nsp_all = R.sum_partials(parts, keep_anns=keep)
     bg_rate = R.load_background(bg_npz)
     for pfx in prefixes:
         keep = [a for a in cover_all if a.split("|", 1)[0] == pfx]

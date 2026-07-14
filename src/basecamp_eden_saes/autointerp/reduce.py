@@ -40,10 +40,28 @@ def load_background(bg_npz: str | Path) -> np.ndarray:
     return bg_cover / np.maximum(bg_count[:, None], 1.0)
 
 
+def panel_nspans(partials: list[str | Path]) -> dict[str, int]:
+    """Cheaply sum per-ann span counts across partials (reads only the tiny
+    ``.nspans.json`` sidecars, no arrays). Used to prefilter annotations to the
+    support gate before the expensive array sum."""
+    nsp: dict[str, int] = defaultdict(int)
+    for f in partials:
+        ns_path = str(f) + ".nspans.json"
+        if Path(ns_path).exists():
+            for a, v in json.load(open(ns_path)).items():
+                nsp[a] += int(v)
+    return dict(nsp)
+
+
 def sum_partials(
-    partials: list[str | Path], prefix: str = ""
+    partials: list[str | Path], prefix: str = "", keep_anns: set | None = None
 ) -> tuple[dict, dict, dict, dict]:
-    """Sum partial npz files. Returns ``(cover, nullc, hist, n_spans)`` dicts."""
+    """Sum partial npz files. Returns ``(cover, nullc, hist, n_spans)`` dicts.
+
+    ``keep_anns``: if given, only these annotation ids are accumulated (skips the
+    array-add + decompression-materialize for all others) -- a large speedup when
+    most annotations are rare (e.g. EC/KO singletons) and will gate out anyway.
+    """
     cover: dict[str, np.ndarray] = {}
     nullc: dict[str, np.ndarray] = {}
     hist: dict[str, np.ndarray] = {}
@@ -57,6 +75,8 @@ def sum_partials(
                 continue
             kind, ann = k.split("::", 1)
             if prefix and not ann.startswith(prefix):
+                continue
+            if keep_anns is not None and ann not in keep_anns:
                 continue
             if kind == "cov":
                 cover[ann] = cover.get(ann, 0) + z[k]
