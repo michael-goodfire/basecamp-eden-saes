@@ -69,8 +69,19 @@ def build(cover_dir, bg_npz, pos_dir, labels, fire_count, total_pos, prefixes,
     detected: dict[str, list] = defaultdict(list)
     per_layer = defaultdict(int)
 
+    # Read the 152 partials ONCE (they are ~300 MB each); reduce every prefix from
+    # the in-memory sums rather than re-globbing per prefix.
+    print(f"summing {len(parts)} partials once...", flush=True)
+    cover_all, null_all, hist_all, nsp_all = R.sum_partials(parts)
+    bg_rate = R.load_background(bg_npz)
     for pfx in prefixes:
-        rows = R.reduce_partials(parts, bg_npz, prefix=pfx + "|", labels=labels, min_spans=min_spans)
+        keep = [a for a in cover_all if a.split("|", 1)[0] == pfx]
+        sub_cover = {a: cover_all[a] for a in keep}
+        sub_null = {a: null_all[a] for a in keep}
+        sub_hist = {a: hist_all[a] for a in keep}
+        sub_nsp = {a: nsp_all.get(a, 0) for a in keep}
+        rows = R.enrichment_rows(sub_cover, sub_null, sub_hist, sub_nsp, bg_rate,
+                                 labels=labels, min_spans=min_spans)
         for r in rows:
             ann, f = r["ann"], r["feature"]
             fs = str(f)
