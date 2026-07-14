@@ -44,20 +44,29 @@ def build_genome(
     n_features: int = M.F_DEFAULT,
     len_bins: np.ndarray = LEN_BINS,
     seed: int = 0,
+    thresh: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Draw ``n_neg`` length-matched random negatives; return (bg_count, bg_cover)."""
+    """Draw ``n_neg`` length-matched random negatives; return (bg_count, bg_cover).
+
+    If ``thresh`` (per-feature peak-firing threshold) is given, negatives use the
+    same peak-firing cover rule as the real spans; otherwise the overlap rule.
+    """
     codes_dir = Path(codes_dir)
     n_len = len(len_bins) - 1
     bg_count = np.zeros(n_len, np.int64)
     bg_cover = np.zeros((n_len, n_features), np.int64)
 
     # load all contig-strand code stores for this genome
-    stores: list[tuple[np.ndarray, np.ndarray, int]] = []
+    stores = []
     for fn in glob.glob(str(Path(codes_dir) / accession / "*.npz")):
-        stores.append(M.load_codes(fn))
+        if thresh is not None:
+            stores.append(M.load_codes_v(fn))
+        else:
+            ip, ix, L = M.load_codes(fn)
+            stores.append((ip, ix, None, L))
     if not stores:
         return bg_count, bg_cover
-    lengths_avail = np.array([L for _, _, L in stores], dtype=np.float64)
+    lengths_avail = np.array([s[-1] for s in stores], dtype=np.float64)
     store_p = lengths_avail / lengths_avail.sum()
 
     span_lengths = np.array([e - s for (_a, _c, _st, s, e) in spans if e > s], dtype=np.int64)
@@ -68,13 +77,16 @@ def build_genome(
     draw_len = span_lengths[rng.integers(0, span_lengths.size, size=n_neg)]
     which = rng.choice(len(stores), size=n_neg, p=store_p)
     for i in range(n_neg):
-        indptr, indices, L = stores[which[i]]
+        indptr, indices, values, L = stores[which[i]]
         length = int(draw_len[i])
         if length >= L or length <= 0:
             continue
         start = int(rng.integers(0, L - length))
-        fs = M.span_cover_features(indptr, indices, start, start + length, L, n_features,
-                                   cover_frac=0.0, overlap=True)
+        if thresh is not None:
+            fs = M.span_peak_cover_features(indptr, indices, values, start, start + length, L, thresh)
+        else:
+            fs = M.span_cover_features(indptr, indices, start, start + length, L, n_features,
+                                       cover_frac=0.0, overlap=True)
         lb = _len_bin(length, len_bins)
         bg_count[lb] += 1
         if fs.size:
@@ -94,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--n-neg", type=int, default=20000)
     b.add_argument("--F", type=int, default=M.F_DEFAULT)
     b.add_argument("--seed", type=int, default=0)
+    b.add_argument("--peak-file", default="")
+    b.add_argument("--peak-frac", type=float, default=0.5)
 
     m = sub.add_parser("merge", help="sum partials into bg.npz")
     m.add_argument("--partials", required=True, help="glob for *_bg.npz partials")
@@ -102,8 +116,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "build":
         spans = read_spans(args.spans)
+        thresh = None
+        if args.peak_file:
+            with np.load(args.peak_file) as _z:
+                thresh = (args.peak_frac * _z["peak"]).astype(np.float32)
+            thresh[thresh <= 0] = np.inf
         bc, bv = build_genome(args.acc, args.codes_dir, spans, n_neg=args.n_neg,
-                               n_features=args.F, seed=args.seed)
+                               n_features=args.F, seed=args.seed, thresh=thresh)
         np.savez_compressed(args.out, bg_count=bc, bg_cover=bv)
         print(f"{args.acc}: {bc.sum()} negatives -> {args.out}")
         return 0

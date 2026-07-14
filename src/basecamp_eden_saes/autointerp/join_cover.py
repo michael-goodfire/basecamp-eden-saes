@@ -52,6 +52,7 @@ def cover_genome(
     n_features: int = M.F_DEFAULT,
     seed: int = 0,
     overlap: bool = False,
+    thresh: np.ndarray | None = None,
 ) -> tuple[dict, dict]:
     """Compute cover/null/hist partials for one genome.
 
@@ -88,7 +89,11 @@ def cover_genome(
         fn = codes_dir / accession / f"{contig}.{'plus' if strand == '+' else 'minus'}.npz"
         if not fn.exists():
             continue
-        indptr, indices, length_total = M.load_codes(fn)
+        if thresh is not None:
+            indptr, indices, values, length_total = M.load_codes_v(fn)
+        else:
+            indptr, indices, length_total = M.load_codes(fn)
+            values = None
         seq = seqs.get(contig)
         deltas = (
             [int(rng.integers(length_total // 10, length_total - length_total // 10))
@@ -103,7 +108,10 @@ def cover_genome(
             ensure(a)
             length = e - s
             cs, ce = M.span_to_code_coords(s, e, st, length_total)
-            fs = M.span_cover_features(indptr, indices, cs, ce, length_total, n_features, cover_frac, overlap=overlap)
+            if thresh is not None:
+                fs = M.span_peak_cover_features(indptr, indices, values, cs, ce, length_total, thresh)
+            else:
+                fs = M.span_cover_features(indptr, indices, cs, ce, length_total, n_features, cover_frac, overlap=overlap)
             if fs.size:
                 cover[a][fs] += 1
             gc = M.gc_fraction(seq, s, e) if seq is not None else 0.0
@@ -112,10 +120,13 @@ def cover_genome(
             for d in deltas:
                 ns = (cs + d) % length_total
                 ne = ns + length
-                fsn = M.span_cover_features(
-                    indptr, indices, ns, ne if ne <= length_total else ne - length_total,
-                    length_total, n_features, cover_frac, overlap=overlap,
-                )
+                ne2 = ne if ne <= length_total else ne - length_total
+                if thresh is not None:
+                    fsn = M.span_peak_cover_features(indptr, indices, values, ns, ne2, length_total, thresh)
+                else:
+                    fsn = M.span_cover_features(
+                        indptr, indices, ns, ne2, length_total, n_features, cover_frac, overlap=overlap,
+                    )
                 if fsn.size:
                     nullc[a][fsn] += inv_nn
 
@@ -142,7 +153,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--overlap", action="store_true",
                     help="cover = fires on >=1 position in the span (motif-aware); "
                          "otherwise the legacy >=cover_frac rule")
+    ap.add_argument("--peak-file", default="", help="feature global-peak npz (enables peak-firing cover)")
+    ap.add_argument("--peak-frac", type=float, default=0.5,
+                    help="cover = in-span activation >= peak-frac * feature peak")
     args = ap.parse_args(argv)
+    thresh = None
+    if args.peak_file:
+        with np.load(args.peak_file) as _z:
+            thresh = (args.peak_frac * _z["peak"]).astype(np.float32)
+        thresh[thresh <= 0] = np.inf  # dead features never cover
 
     spans = read_spans(args.spans)
     if not spans:
@@ -153,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     arrays, nsp = cover_genome(
         args.acc, args.codes_dir, args.fasta, args.bg, spans,
         cover_frac=args.cover, n_null=args.n_null, n_features=args.F, seed=args.seed,
-        overlap=args.overlap,
+        overlap=args.overlap, thresh=thresh,
     )
     np.savez_compressed(args.out, **arrays)
     json.dump(nsp, open(args.out + ".nspans.json", "w"))

@@ -145,7 +145,7 @@ def enrichment_rows(
                 "n_spans": int(n), "n_covered": int(c),
                 "recall": round(recall, 4), "recall_lo": round(rlo, 4),
                 "recall_hi": round(rhi, 4), "precision_fold": round(float(pf), 3),
-                "null_fold": round(float(nf), 3), "p": float(p), "q": float(qv),
+                "recall_lift": round(float(nf), 3), "p": float(p), "q": float(qv),
             })
     rows.sort(key=lambda r: (r["ann"], -r["recall"]))
     return rows

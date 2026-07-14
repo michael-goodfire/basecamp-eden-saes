@@ -35,6 +35,48 @@ def load_codes(path: str | Path) -> tuple[np.ndarray, np.ndarray, int]:
     return indptr, indices, int(indptr.shape[0] - 1)
 
 
+def load_codes_v(path: str | Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """Like :func:`load_codes` but also returns the per-firing activation ``values``
+    (float16 magnitudes), needed for the peak-firing cover rule."""
+    z = np.load(path)
+    indptr = z["indptr"]
+    indices = z["indices"]
+    values = z["values"]
+    return indptr, indices, values, int(indptr.shape[0] - 1)
+
+
+def span_peak_cover_features(
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    values: np.ndarray,
+    start: int,
+    end: int,
+    length_total: int,
+    thresh: np.ndarray,
+) -> np.ndarray:
+    """Feature ids that fire STRONGLY inside a span (peak-firing cover rule).
+
+    A feature covers the span if it has at least one in-span activation
+    ``value >= thresh[feature]`` where ``thresh = fraction * feature_global_peak``.
+    This surfaces a feature's identity (where its strongest firings land) rather
+    than any weak off-target firing. ``start > end`` wraps the circular contig.
+    """
+    if start <= end:
+        seg_i = indices[indptr[start]:indptr[end]]
+        seg_v = values[indptr[start]:indptr[end]]
+    else:
+        seg_i = np.concatenate(
+            [indices[indptr[start]:indptr[length_total]], indices[indptr[0]:indptr[end]]])
+        seg_v = np.concatenate(
+            [values[indptr[start]:indptr[length_total]], values[indptr[0]:indptr[end]]])
+    if seg_i.size == 0:
+        return np.empty(0, dtype=np.int64)
+    mask = seg_v.astype(np.float32) >= thresh[seg_i]
+    if not mask.any():
+        return np.empty(0, dtype=np.int64)
+    return np.unique(seg_i[mask])
+
+
 def span_cover_features(
     indptr: np.ndarray,
     indices: np.ndarray,
