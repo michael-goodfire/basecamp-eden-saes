@@ -89,6 +89,7 @@ export function drawTracks() {
     .sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start))
     .map((d) => [d]);
   const rnaLanes = packLanes(e.rnas || []);
+  const rfamLanes = packLanes(e.rfam || []);
   const fold = e.folds || {}, v2 = e.v2 || {};
   const cathLanes = packLanes(fold.cath || []), tedLanes = packLanes(fold.ted || []);
   const regLanes = packLanes(v2.regulatory || []), opLanes = packLanes(v2.operon || []);
@@ -113,6 +114,7 @@ export function drawTracks() {
   if (tedLanes.length) row(tedLanes.length * 15, "TED fold", (r) => laneRow(r, tedLanes, "#9a8fc0", "fold"));
   const rnaH = Math.max(1, rnaLanes.length) * 15;
   row(rnaH, "RNA", (r) => laneRow(r, rnaLanes, "var(--forest)", "rna"));
+  if (rfamLanes.length) row(rfamLanes.length * 15, "Rfam RNA", (r) => laneRow(r, rfamLanes, "#2f8f8f", "rfam"));
   if (regLanes.length) row(regLanes.length * 15, "regulatory", (r) => laneRow(r, regLanes, "#c98a2b", "v2"));
   if (opLanes.length) row(opLanes.length * 15, "operon", (r) => laneRow(r, opLanes, "#4f8f6a", "v2"));
   if (repLanes.length) row(repLanes.length * 15, "replication", (r) => laneRow(r, repLanes, "#b0563a", "v2"));
@@ -216,6 +218,9 @@ export function drawTracks() {
         } else if (kind === "fold") {
           nm = d.name || d.code;
           tip = `${esc(nm)} (${esc(d.code)})`;
+        } else if (kind === "rfam") {
+          nm = d.label;
+          tip = `${esc(d.label)} (${esc(d.rf)})` + (d.strand && d.strand !== "." ? ` [${d.strand}]` : "");
         } else if (kind === "v2") {
           nm = v2name(d.t);
           tip = esc(nm) + (d.l && d.l !== d.t ? `<br>${esc(d.l)}` : "") + (d.strand && d.strand !== "." ? ` (${d.strand})` : "");
