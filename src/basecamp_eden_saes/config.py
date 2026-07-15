@@ -32,24 +32,17 @@ _DEFAULT_ANNOTATION_BUNDLE = "/mnt/data/artifacts/silico/eden_annotation_panel_v
 # The 740 GB full-sparse code store (stable shared path; the per-model subdirs are
 # code_store/{bcr,og2}).
 _DEFAULT_CODE_STORE = "/mnt/data/artifacts/silico/basecamp-eden-saes/code_store"
-# Per-dict matched-negative backgrounds (experiment #38 metrics; not relocated to
-# the stable root, so still referenced at their produced location).
-_DEFAULT_BG_ROOT = (
-    "/mnt/data/artifacts/silico/experiments/_flat/"
-    "exp_01kwxjy7zmf30b1tb9k58pspfp/metrics"
-)
-# Panel genome FASTA (experiment #31; used only for exact per-span GC). The bundle
-# documents these are reconstructable from panel/accessions.txt via the NCBI
-# Datasets CLI if this path is unavailable.
-_DEFAULT_PANEL_GENOMES = (
-    "/mnt/data/artifacts/silico/experiments/_flat/"
-    "exp_01kwd6629qfvsvdjda4kfyft2z/panel/genomes"
-)
-# ~50 GB AlphaFold-DB structure cache (experiment #49 artifacts).
-_DEFAULT_AF_CACHE = (
-    "/mnt/data/artifacts/silico/experiments/_flat/"
-    "exp_01kx09bzv8fjqvh3k37t6c9x47/af_cache"
-)
+# Per-dict matched-negative backgrounds (experiment #38 metrics). Relocated to the
+# shared basecamp namespace (#70); the old _flat path is a symlink to this.
+_DEFAULT_BG_ROOT = "/mnt/data/artifacts/silico/basecamp-eden-saes/bg_metrics"
+# Panel genome FASTA (experiment #31; used only for exact per-span GC). Relocated
+# to the shared basecamp namespace (#70); old _flat path symlinked. Also
+# reconstructable from panel/accessions.txt via the NCBI Datasets CLI.
+_DEFAULT_PANEL_GENOMES = "/mnt/data/artifacts/silico/basecamp-eden-saes/panel_genomes"
+# AlphaFold-DB structure cache (experiment #49's 173k CIFs + #3's 63k AFDB-v6
+# panel models merged in). Relocated to the shared basecamp namespace (#70); the
+# old #49 _flat path is a symlink to this.
+_DEFAULT_AF_CACHE = "/mnt/data/artifacts/silico/basecamp-eden-saes/af_cache"
 
 # Code-store subdirectory + background file per dictionary name. The dictionary
 # name identifies (model, expansion, k): the three shipped SAEs are the ef8 grid.
