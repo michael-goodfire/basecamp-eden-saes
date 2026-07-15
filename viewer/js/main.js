@@ -242,9 +242,15 @@ function annotationTable(d) {
       // position-level effect size is now LIFT = PPV / prior (unbounded, not
       // capped). PPV = P(in annotation | feature fires) in [0,1]; prior =
       // P(in annotation). Significance (q) still comes from the circular-shift null.
-      const liftCell = (a.lift !== undefined)
-        ? `<span title="lift = PPV ÷ prior = P(in annotation | feature fires) ÷ P(in annotation)">${fmtFold(a.lift)}</span>` +
-          `<div class="sub">${fmtRate(a.ppv)} / ${fmtRate(a.prior)}</div>`
+      // lift is served via the rates sidecar (rates.json -> e.rates = [pos_rate, bg_rate, ppv, prior, lift]),
+      // falling back to embedded a.lift if present.
+      const rt = Array.isArray(a.rates) ? a.rates : null;
+      const liftV = (a.lift !== undefined) ? a.lift : (rt ? rt[4] : undefined);
+      const ppvV = (a.ppv !== undefined) ? a.ppv : (rt ? rt[2] : undefined);
+      const priorV = (a.prior !== undefined) ? a.prior : (rt ? rt[3] : undefined);
+      const liftCell = (liftV !== undefined)
+        ? `<span title="lift = PPV ÷ prior = P(in annotation | feature fires) ÷ P(in annotation)">${fmtFold(liftV)}</span>` +
+          `<div class="sub">${fmtRate(ppvV)} / ${fmtRate(priorV)}</div>`
         : `<span class="sub" title="lift not available for this annotation type (no per-position firing rate, e.g. GO/keyword)">n/a</span>`;
       return `<tr><td><span class="pill ${esc(a.class)}">${esc(a.class)}</span></td>` +
         `<td>${esc(name)}<div class="sub">${esc(sub)}</div></td>` +
